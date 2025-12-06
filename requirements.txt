@@ -24,7 +24,7 @@ mypy==1.16.1
 mypy_extensions==1.1.0
 packaging==25.0
 pathspec==0.12.1
-platform_common @ git+https://${PLATFORM_COMMON_TOKEN}@github.com/migoVanDingo/ed-platform-common@442525a9cc5c256eaaa34ccbb52db1ac518d0c8c
+platform_common @ git+https://${PLATFORM_COMMON_TOKEN}@github.com/migoVanDingo/ed-platform-common@main
 platformdirs==4.3.8
 pluggy==1.6.0
 pycodestyle==2.14.0
