@@ -4,8 +4,10 @@ from contextlib import asynccontextmanager
 import asyncio
 from app.pubsub.user_changes_subscriber import start_user_changes_subscriber
 from app.api.controller.health_check import router as health_router
+from app.graphql.context import get_context
+
 from platform_common.logging.logging import get_logger
-from app.graphql.schema import schema
+from app.graphql.root_schema import schema
 from strawberry.fastapi import GraphQLRouter
 from strawberry.subscriptions import GRAPHQL_TRANSPORT_WS_PROTOCOL, GRAPHQL_WS_PROTOCOL
 
@@ -37,6 +39,7 @@ graphql_app = GraphQLRouter(
     schema,
     graphiql=True,
     subscription_protocols=[GRAPHQL_TRANSPORT_WS_PROTOCOL, GRAPHQL_WS_PROTOCOL],
+    context_getter=get_context,
 )
 
 
