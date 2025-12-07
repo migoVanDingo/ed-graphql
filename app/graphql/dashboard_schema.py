@@ -13,6 +13,7 @@ from platform_common.db.session import get_session
 from platform_common.errors.base import ForbiddenError, InternalServerError
 from platform_common.logging.logging import get_logger
 from platform_common.utils.time_helpers import to_datetime_utc
+from platform_common.models.file import File as FileModel
 
 logger = get_logger("graphql_dashboard")
 
@@ -32,14 +33,6 @@ class OrganizationType:
 
 
 @strawberry.type
-class DatastoreType:
-    id: str
-    name: str
-    description: Optional[str]
-    created_at: datetime
-
-
-@strawberry.type
 class ProjectType:
     id: str
     name: str
@@ -53,6 +46,87 @@ class DatasetType:
     name: str
     description: Optional[str]
     created_at: datetime
+
+
+@strawberry.type
+class DatastoreFileType:
+    id: str
+    filename: str
+    content_type: str
+    size: int
+    created_at: datetime
+
+
+@strawberry.type
+class DatastoreFileTypeBreakdownType:
+    content_type: str
+    file_count: int
+    total_bytes: int
+
+
+@strawberry.type
+class DatastoreFileCategoryBreakdownType:
+    # e.g. "csv", "json", "mp4", "wav", "audio", "video", "other"
+    category: str
+
+    # if you want to show the underlying MIME types in a tooltip, etc.
+    content_types: List[str]
+
+    file_count: int
+    total_bytes: int
+
+
+@strawberry.type
+class DatastoreMetricsType:
+    capacity_bytes: Optional[int]
+    used_bytes: int
+    free_bytes: Optional[int]
+    used_percent: Optional[float]
+
+    file_count: int
+    last_upload_at: Optional[datetime]
+
+    # ← changed to category-based breakdown:
+    by_category: List[DatastoreFileCategoryBreakdownType]
+
+
+@strawberry.type
+class DatastoreFilesPageType:
+    items: List[DatastoreFileType]
+    total_count: int
+    # simple offset-based pagination for now
+    limit: int
+    offset: int
+
+
+@strawberry.type
+class DatastoreType:
+    id: str
+    name: str
+    description: Optional[str]
+    created_at: datetime
+
+    @strawberry.field
+    async def metrics(self, info) -> DatastoreMetricsType:
+        from app.resolvers.datastore_resolvers import get_datastore_metrics
+
+        return await get_datastore_metrics(info, datastore_id=self.id)
+
+    @strawberry.field
+    async def files(
+        self,
+        info,
+        limit: int = 25,
+        offset: int = 0,
+    ) -> DatastoreFilesPageType:
+        from app.resolvers.datastore_resolvers import get_datastore_files_page
+
+        return await get_datastore_files_page(
+            info,
+            datastore_id=self.id,
+            limit=limit,
+            offset=offset,
+        )
 
 
 @strawberry.type
