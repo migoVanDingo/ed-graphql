@@ -9,8 +9,10 @@ from platform_common.db.dal.datastore_dal import DatastoreDAL
 from platform_common.db.dal.project_dal import ProjectDAL
 from platform_common.db.dal.dataset_dal import DatasetDAL
 from platform_common.db.dal.organization_dal import OrganizationDAL
+from platform_common.db.session import get_session
 from platform_common.errors.base import ForbiddenError, InternalServerError
 from platform_common.logging.logging import get_logger
+from platform_common.utils.time_helpers import to_datetime_utc
 
 logger = get_logger("graphql_dashboard")
 
@@ -75,16 +77,16 @@ class UserType:
         """
         All organizations this user is a member of.
         """
-        db_session = info.context["db_session"]
         current_user: UserModel = info.context["current_user"]
 
         if current_user.id != self.id:
             raise ForbiddenError("You are not allowed to view these organizations")
 
-        org_dal = OrganizationDAL(db_session)
-
         try:
-            orgs = await org_dal.list_for_user(current_user.id)
+            async for session in get_session():
+                org_dal = OrganizationDAL(session)
+                orgs = await org_dal.list_for_user(current_user.id)
+                break
         except Exception as e:
             logger.error(
                 "Error loading organizations for user %s: %r", current_user.id, e
@@ -96,7 +98,7 @@ class UserType:
                 id=o.id,
                 name=o.name,
                 description=getattr(o, "description", None),
-                created_at=o.created_at,
+                created_at=to_datetime_utc(o.created_at),
             )
             for o in orgs
         ]
@@ -114,20 +116,21 @@ class UserType:
             as the org scope.
           - Otherwise, DatastoreDAL.list_for_user falls back to owner_id.
         """
-        db_session = info.context["db_session"]
         current_user: UserModel = info.context["current_user"]
 
         if current_user.id != self.id:
             raise ForbiddenError("You are not allowed to view these datastores")
 
         org_id = getattr(current_user, "organization_id", None)
-        datastore_dal = DatastoreDAL(db_session)
 
         try:
-            datastores = await datastore_dal.list_for_user(
-                user_id=current_user.id,
-                organization_id=org_id,
-            )
+            async for session in get_session():
+                datastore_dal = DatastoreDAL(session)
+                datastores = await datastore_dal.list_for_user(
+                    user_id=current_user.id,
+                    organization_id=org_id,
+                )
+                break
         except Exception as e:
             logger.error("Error loading datastores for user %s: %r", current_user.id, e)
             raise InternalServerError("Failed to load datastores")
@@ -137,7 +140,7 @@ class UserType:
                 id=d.id,
                 name=d.name,
                 description=getattr(d, "description", None),
-                created_at=d.created_at,
+                created_at=to_datetime_utc(d.created_at),
             )
             for d in datastores
         ]
@@ -150,20 +153,21 @@ class UserType:
         """
         Projects visible to this user.
         """
-        db_session = info.context["db_session"]
         current_user: UserModel = info.context["current_user"]
 
         if current_user.id != self.id:
             raise ForbiddenError("You are not allowed to view these projects")
 
         org_id = getattr(current_user, "organization_id", None)
-        project_dal = ProjectDAL(db_session)
 
         try:
-            projects = await project_dal.list_for_user(
-                user_id=current_user.id,
-                organization_id=org_id,
-            )
+            async for session in get_session():
+                project_dal = ProjectDAL(session)
+                projects = await project_dal.list_for_user(
+                    user_id=current_user.id,
+                    organization_id=org_id,
+                )
+                break
         except Exception as e:
             logger.error("Error loading projects for user %s: %r", current_user.id, e)
             raise InternalServerError("Failed to load projects")
@@ -173,7 +177,7 @@ class UserType:
                 id=p.id,
                 name=p.name,
                 description=getattr(p, "description", None),
-                created_at=p.created_at,
+                created_at=to_datetime_utc(p.created_at),
             )
             for p in projects
         ]
@@ -186,20 +190,21 @@ class UserType:
         """
         Datasets visible to this user.
         """
-        db_session = info.context["db_session"]
         current_user: UserModel = info.context["current_user"]
 
         if current_user.id != self.id:
             raise ForbiddenError("You are not allowed to view these datasets")
 
         org_id = getattr(current_user, "organization_id", None)
-        dataset_dal = DatasetDAL(db_session)
 
         try:
-            datasets = await dataset_dal.list_for_user(
-                user_id=current_user.id,
-                organization_id=org_id,
-            )
+            async for session in get_session():
+                dataset_dal = DatasetDAL(session)
+                datasets = await dataset_dal.list_for_user(
+                    user_id=current_user.id,
+                    organization_id=org_id,
+                )
+                break
         except Exception as e:
             logger.error("Error loading datasets for user %s: %r", current_user.id, e)
             raise InternalServerError("Failed to load datasets")
@@ -209,7 +214,7 @@ class UserType:
                 id=d.id,
                 name=d.name,
                 description=getattr(d, "description", None),
-                created_at=d.created_at,
+                created_at=to_datetime_utc(d.created_at),
             )
             for d in datasets
         ]

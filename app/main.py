@@ -5,7 +5,7 @@ import asyncio
 from app.pubsub.user_changes_subscriber import start_user_changes_subscriber
 from app.api.controller.health_check import router as health_router
 from app.graphql.context import get_context
-
+from fastapi.middleware.cors import CORSMiddleware
 from platform_common.logging.logging import get_logger
 from app.graphql.root_schema import schema
 from strawberry.fastapi import GraphQLRouter
@@ -33,6 +33,21 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="GraphQL Service", lifespan=lifespan)
+
+# Allowed origins for your frontend(s)
+origins = [
+    "http://localhost:5173",  # Vite dev server
+    "http://localhost:3000",  # if you ever use CRA/Next
+    # add any others you actually use
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,  # you're using cookies
+    allow_methods=["*"],  # or ["GET", "POST"] if you want to be strict
+    allow_headers=["*"],  # allow Content-Type, etc.
+)
 
 
 graphql_app = GraphQLRouter(
