@@ -1,8 +1,12 @@
+# app/resolvers/datastore_resolvers.py
+
 from typing import Dict, List
 from strawberry.types import Info
 
+from platform_common.db.session import get_session
 from platform_common.db.dal.file_dal import FileDAL
 from platform_common.db.dal.datastore_dal import DatastoreDAL
+from platform_common.utils.time_helpers import to_datetime_utc
 
 from app.graphql.dashboard_schema import (
     DatastoreMetricsType,
@@ -12,20 +16,10 @@ from app.graphql.dashboard_schema import (
 )
 
 
-def get_file_dal(info: Info) -> FileDAL:
-    return info.context["file_dal"]
-
-
-def get_datastore_dal(info: Info) -> DatastoreDAL:
-    return info.context["datastore_dal"]
-
-
 def classify_category_from_content_type(content_type: str) -> str:
     """
     Map MIME types into dashboard categories that match your FE:
     csv, json, mp4, wav, audio, video, other, etc.
-
-    You can extend this over time (pdf, image, parquet, etc).
     """
     ct = (content_type or "").lower()
 
@@ -52,7 +46,7 @@ def classify_category_from_content_type(content_type: str) -> str:
     if ct.startswith("audio/"):
         return "audio"
 
-    if ct in ("application/pdf",):
+    if ct == "application/pdf":
         return "pdf"
 
     if ct.startswith("image/"):
@@ -62,20 +56,31 @@ def classify_category_from_content_type(content_type: str) -> str:
 
 
 async def get_datastore_metrics(info: Info, datastore_id: str) -> DatastoreMetricsType:
-    file_dal = get_file_dal(info)
-    datastore_dal = get_datastore_dal(info)
+    """
+    Compute metrics for a datastore.
+    """
+    async for session in get_session():
+        file_dal = FileDAL(session)
+        datastore_dal = DatastoreDAL(session)
 
-    aggregates = await file_dal.get_datastore_aggregate_metrics(datastore_id)
-    content_type_rows = await file_dal.get_datastore_content_type_breakdown(
-        datastore_id
-    )
-    capacity_bytes = await datastore_dal.get_datastore_capacity_bytes(datastore_id)
+        aggregates = await file_dal.get_datastore_aggregate_metrics(datastore_id)
+        content_type_rows = await file_dal.get_datastore_content_type_breakdown(
+            datastore_id
+        )
+        capacity_bytes = await datastore_dal.get_datastore_capacity_bytes(datastore_id)
+
+        break
 
     used_bytes = aggregates["used_bytes"]
     file_count = aggregates["file_count"]
-    last_upload_at = aggregates["last_upload_at"]
 
-    # compute free and percent if capacity exists
+    # aggregates["last_upload_at"] is currently an int (epoch seconds)
+    raw_last_upload_at = aggregates["last_upload_at"]
+    if raw_last_upload_at is not None:
+        last_upload_at = to_datetime_utc(raw_last_upload_at)
+    else:
+        last_upload_at = None
+
     free_bytes = None
     used_percent = None
     if capacity_bytes is not None:
@@ -86,7 +91,6 @@ async def get_datastore_metrics(info: Info, datastore_id: str) -> DatastoreMetri
             else 0.0
         )
 
-    # fold MIME types into FE-facing categories
     buckets: Dict[str, Dict[str, object]] = {}
 
     for row in content_type_rows:
@@ -121,8 +125,8 @@ async def get_datastore_metrics(info: Info, datastore_id: str) -> DatastoreMetri
         used_bytes=used_bytes,
         free_bytes=free_bytes,
         used_percent=used_percent,
-        file_count=file_count,  # ← overall fileCount
-        last_upload_at=last_upload_at,
+        file_count=file_count,
+        last_upload_at=last_upload_at,  # ← now a datetime or None
         by_category=by_category,
     )
 
@@ -133,19 +137,14 @@ async def get_datastore_files_page(
     limit: int,
     offset: int,
 ) -> DatastoreFilesPageType:
-    """
-    Resolver for DatastoreType.files.
-
-    Uses FileDAL to fetch a page of files for the given datastore and
-    maps them into DatastoreFileType + DatastoreFilesPageType.
-    """
-    file_dal = get_file_dal(info)
-
-    page = await file_dal.get_datastore_files_page(
-        datastore_id=datastore_id,
-        limit=limit,
-        offset=offset,
-    )
+    async for session in get_session():
+        file_dal = FileDAL(session)
+        page = await file_dal.get_datastore_files_page(
+            datastore_id=datastore_id,
+            limit=limit,
+            offset=offset,
+        )
+        break
 
     items = page["items"]
     total_count = page["total_count"]
@@ -156,7 +155,7 @@ async def get_datastore_files_page(
             filename=f.filename,
             content_type=f.content_type,
             size=f.size,
-            created_at=f.created_at,
+            created_at=to_datetime_utc(f.created_at),  # ← convert here
         )
         for f in items
     ]
