@@ -51,7 +51,7 @@ app.add_middleware(
 
 
 graphql_app = GraphQLRouter(
-    schema,
+    schema=schema,
     graphiql=True,
     subscription_protocols=[GRAPHQL_TRANSPORT_WS_PROTOCOL, GRAPHQL_WS_PROTOCOL],
     context_getter=get_context,

@@ -8,7 +8,8 @@ from platform_common.db.dal.file_dal import FileDAL
 from platform_common.db.dal.datastore_dal import DatastoreDAL
 from platform_common.utils.time_helpers import to_datetime_utc
 
-from app.graphql.dashboard_schema import (
+from app.graphql.dashboard.types.datastore_type import (
+    DatastoreType,
     DatastoreMetricsType,
     DatastoreFileCategoryBreakdownType,
     DatastoreFilesPageType,
