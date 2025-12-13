@@ -15,7 +15,7 @@ logger = get_logger("graphql_dashboard_subscription")
 _DATASTORE_SUBSCRIBERS: Dict[str, List[asyncio.Queue]] = {}
 
 
-async def publish_datastore_update(datastore_id: str) -> None:
+async def push_datastore_update_to_clients(datastore_id: str) -> None:
     """
     Call this whenever datastore content changes (e.g. after file upload).
 

@@ -1,7 +1,8 @@
 # app/graphql/dashboard/types/datastore_type.py
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
+from app.graphql.dashboard.scalars import BigInt
 
 import strawberry
 
