@@ -7,12 +7,13 @@ from app.api.controller.health_check import router as health_router
 from app.graphql.context import get_context
 from fastapi.middleware.cors import CORSMiddleware
 from platform_common.logging.logging import get_logger
-from app.graphql.root_schema import schema
+from app.graphql.schema.root_schema import schema
 from strawberry.fastapi import GraphQLRouter
 from strawberry.subscriptions import GRAPHQL_TRANSPORT_WS_PROTOCOL, GRAPHQL_WS_PROTOCOL
 from app.pubsub.upload_session_status_subscriber import (
     start_upload_session_status_subscriber,
 )
+from app.pubsub.file_subscriber import start_file_status_subscriber
 
 logger = get_logger("lifespan")
 
@@ -28,6 +29,9 @@ async def lifespan(app: FastAPI):
     # Start upload_session status subscriber
     upload_session_task = asyncio.create_task(start_upload_session_status_subscriber())
     app.state.upload_session_status_task = upload_session_task
+
+    file_task = asyncio.create_task(start_file_status_subscriber())
+    app.state.file_status_task = file_task
 
     # tap_task = asyncio.create_task(start_raw_tap())
 
@@ -49,6 +53,13 @@ async def lifespan(app: FastAPI):
             await upload_session_task
         except asyncio.CancelledError:
             logger.info("Upload session status subscriber task cancelled cleanly.")
+
+        # Stop file status subscriber
+        file_task.cancel()
+        try:
+            await file_task
+        except asyncio.CancelledError:
+            logger.info("File status subscriber task cancelled cleanly.")
 
 
 app = FastAPI(title="GraphQL Service", lifespan=lifespan)

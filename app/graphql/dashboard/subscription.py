@@ -1,28 +1,26 @@
-from typing import AsyncGenerator, Dict, List
+# app/graphql/dashboard/subscription.py
+from typing import AsyncGenerator, Dict, List, Optional
 import asyncio
+from datetime import datetime
 
 import strawberry
+from strawberry.types import Info
+from graphql import GraphQLError
 
-from platform_common.db.dal.datastore_dal import DatastoreDAL
 from platform_common.logging.logging import get_logger
-
+from app.utils.db_helpers import get_datastore_dal
 from app.graphql.dashboard.types import DatastoreType
 
 logger = get_logger("graphql_dashboard_subscription")
 
+# ─────────────────────────────────────────
+# Existing datastore subscription state
+# ─────────────────────────────────────────
 
-# key: datastore_id, value: list[asyncio.Queue[None]]
-_DATASTORE_SUBSCRIBERS: Dict[str, List[asyncio.Queue]] = {}
+_DATASTORE_SUBSCRIBERS: Dict[str, List[asyncio.Queue[None]]] = {}
 
 
 async def push_datastore_update_to_clients(datastore_id: str) -> None:
-    """
-    Call this whenever datastore content changes (e.g. after file upload).
-
-    We don't send the metrics themselves; metrics are always recomputed
-    via DatastoreDAL.get_datastore_with_metrics inside the subscription,
-    so this stays consistent with your existing dashboard query.
-    """
     queues = _DATASTORE_SUBSCRIBERS.get(datastore_id, [])
     if not queues:
         return
@@ -33,15 +31,19 @@ async def push_datastore_update_to_clients(datastore_id: str) -> None:
         datastore_id,
     )
 
-    for q in queues:
-        await q.put(None)  # just a wake-up signal
+    for q in list(queues):
+        await q.put(None)
 
 
-def _register_datastore_subscriber(datastore_id: str, queue: asyncio.Queue) -> None:
+def _register_datastore_subscriber(
+    datastore_id: str, queue: asyncio.Queue[None]
+) -> None:
     _DATASTORE_SUBSCRIBERS.setdefault(datastore_id, []).append(queue)
 
 
-def _unregister_datastore_subscriber(datastore_id: str, queue: asyncio.Queue) -> None:
+def _unregister_datastore_subscriber(
+    datastore_id: str, queue: asyncio.Queue[None]
+) -> None:
     queues = _DATASTORE_SUBSCRIBERS.get(datastore_id)
     if not queues:
         return
@@ -53,55 +55,151 @@ def _unregister_datastore_subscriber(datastore_id: str, queue: asyncio.Queue) ->
         _DATASTORE_SUBSCRIBERS.pop(datastore_id, None)
 
 
+async def _fetch_datastore_snapshot(datastore_id: str):
+    """
+    Open a new DAL/session and fetch the latest *active* datastore.
+    Metrics will be resolved by DatastoreType field resolvers.
+    """
+    async with get_datastore_dal() as datastore_dal:
+        ds = await datastore_dal.get_active(datastore_id)
+        if ds is None:
+            raise GraphQLError(f"Datastore {datastore_id} not found or inactive")
+        return ds
+
+
+# ─────────────────────────────────────────
+# NEW: file status subscription state
+# ─────────────────────────────────────────
+
+
+@strawberry.type
+class FileStatusEvent:
+    file_id: strawberry.ID
+    datastore_id: strawberry.ID
+    upload_session_id: Optional[strawberry.ID]
+    old_status: str
+    new_status: str
+    occurred_at: datetime
+
+
+# per-datastore list of queues that carry FileStatusEvent
+_FILE_STATUS_SUBSCRIBERS: Dict[str, List[asyncio.Queue[FileStatusEvent]]] = {}
+
+
+async def push_file_status_event_to_clients(event: FileStatusEvent) -> None:
+    """
+    Called by the Redis subscriber when a file:status message arrives.
+    It fans out the event to all subscribers for this datastore.
+    """
+    datastore_id = str(event.datastore_id)
+    queues = _FILE_STATUS_SUBSCRIBERS.get(datastore_id, [])
+    if not queues:
+        return
+
+    logger.debug(
+        "Pushing file event to %d subscribers for datastore_id=%s",
+        len(queues),
+        datastore_id,
+    )
+
+    for q in list(queues):
+        await q.put(event)
+
+
+def _register_file_status_subscriber(
+    datastore_id: str, queue: asyncio.Queue[FileStatusEvent]
+) -> None:
+    _FILE_STATUS_SUBSCRIBERS.setdefault(datastore_id, []).append(queue)
+
+
+def _unregister_file_status_subscriber(
+    datastore_id: str, queue: asyncio.Queue[FileStatusEvent]
+) -> None:
+    queues = _FILE_STATUS_SUBSCRIBERS.get(datastore_id)
+    if not queues:
+        return
+    try:
+        queues.remove(queue)
+    except ValueError:
+        pass
+    if not queues:
+        _FILE_STATUS_SUBSCRIBERS.pop(datastore_id, None)
+
+
 @strawberry.type
 class Subscription:
+
+    # Datastore
     @strawberry.subscription
     async def datastore_updated(
         self,
         datastore_id: strawberry.ID,
-        info: strawberry.types.Info,
+        info: Info,
     ) -> AsyncGenerator[DatastoreType, None]:
-        """
-        Stream updates for a specific datastore.
+        datastore_id_str = str(datastore_id)
 
-        - First payload: the current snapshot (computed from DAL).
-        - Subsequent payloads: new snapshots whenever publish_datastore_update()
-          is called for this datastore_id.
-        """
-        datastore_dal: DatastoreDAL = info.context["datastore_dal"]
-        ds = await datastore_dal.get_datastore_with_metrics(str(datastore_id))
+        # 1 Initial snapshot
+        ds = await _fetch_datastore_snapshot(datastore_id_str)
 
-        # 1) initial snapshot
-        yield DatastoreType(
+        initial_payload = DatastoreType(
             id=ds.id,
             name=ds.name,
             description=ds.description,
             created_at=ds.created_at,
-            # TODO: add your metrics fields here, e.g.:
-            # used_bytes=ds.used_bytes,
-            # capacity_bytes=ds.capacity_bytes,
-            # free_bytes=ds.free_bytes,
-            # file_count=ds.file_count,
         )
 
-        # 2) subscribe to further updates
-        queue: asyncio.Queue = asyncio.Queue()
-        _register_datastore_subscriber(str(datastore_id), queue)
+        yield initial_payload
+
+        # 2 Subscribe to further updates
+        queue: asyncio.Queue[None] = asyncio.Queue()
+        _register_datastore_subscriber(datastore_id_str, queue)
 
         try:
             while True:
-                # wait for a signal
-                await queue.get()
+                await queue.get()  # wait for push_datastore_update_to_clients()
 
-                # recompute metrics fresh each time
-                ds = await datastore_dal.get_datastore_with_metrics(str(datastore_id))
+                ds = await _fetch_datastore_snapshot(datastore_id_str)
 
-                yield DatastoreType(
+                next_payload = DatastoreType(
                     id=ds.id,
                     name=ds.name,
                     description=ds.description,
                     created_at=ds.created_at,
-                    # same metrics fields here as above
                 )
+
+                yield next_payload
         finally:
-            _unregister_datastore_subscriber(str(datastore_id), queue)
+            _unregister_datastore_subscriber(datastore_id_str, queue)
+
+    # NEW: File status subscription
+    @strawberry.subscription
+    async def file_status_updated(
+        self,
+        datastore_id: strawberry.ID,
+        upload_session_id: Optional[strawberry.ID],
+        info: Info,
+    ) -> AsyncGenerator[FileStatusEvent, None]:
+        """
+        Stream per-file status changes for a given datastore.
+        Optionally filter by upload_session_id.
+        """
+        datastore_id_str = str(datastore_id)
+        upload_session_id_str = str(upload_session_id) if upload_session_id else None
+
+        # No initial snapshot; we only stream changes
+        queue: asyncio.Queue[FileStatusEvent] = asyncio.Queue()
+        _register_file_status_subscriber(datastore_id_str, queue)
+
+        try:
+            while True:
+                event = await queue.get()
+
+                if (
+                    upload_session_id_str
+                    and str(event.upload_session_id) != upload_session_id_str
+                ):
+                    continue
+
+                yield event
+        finally:
+            _unregister_file_status_subscriber(datastore_id_str, queue)
