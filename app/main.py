@@ -7,6 +7,8 @@ from app.api.controller.health_check import router as health_router
 from app.graphql.context import get_context
 from fastapi.middleware.cors import CORSMiddleware
 from platform_common.logging.logging import get_logger
+from platform_common.middleware.request_id_middleware import RequestIDMiddleware
+from platform_common.exception_handling.handlers import add_exception_handlers
 from app.graphql.schema.root_schema import schema
 from strawberry.fastapi import GraphQLRouter
 from strawberry.subscriptions import GRAPHQL_TRANSPORT_WS_PROTOCOL, GRAPHQL_WS_PROTOCOL
@@ -63,6 +65,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="GraphQL Service", lifespan=lifespan)
+app.add_middleware(RequestIDMiddleware)
+add_exception_handlers(app)
 
 # Allowed origins for your frontend(s)
 origins = [
