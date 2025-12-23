@@ -136,6 +136,7 @@ class UserType:
             ProjectType(
                 id=p.id,
                 name=p.name,
+                status=p.status,
                 description=getattr(p, "description", None),
                 created_at=to_datetime_utc(p.created_at),
             )

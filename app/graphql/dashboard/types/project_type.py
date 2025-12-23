@@ -9,5 +9,6 @@ import strawberry
 class ProjectType:
     id: str
     name: str
+    status: str
     description: Optional[str]
     created_at: datetime
