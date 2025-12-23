@@ -15,7 +15,7 @@ from platform_common.utils.time_helpers import to_datetime_utc
 from .organization_type import OrganizationType
 from .datastore_type import DatastoreType
 from .project_type import ProjectType
-from .dataset_type import DatasetType
+from app.graphql.schema.dataset_schema import DatasetType
 
 logger = get_logger("graphql_dashboard_user")
 

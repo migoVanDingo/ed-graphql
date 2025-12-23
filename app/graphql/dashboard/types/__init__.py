@@ -3,7 +3,7 @@
 from .organization_type import OrganizationType
 from .datastore_type import DatastoreType
 from .project_type import ProjectType
-from .dataset_type import DatasetType
+from app.graphql.schema.dataset_schema import DatasetType
 from .user_type import UserType
 
 __all__ = [
