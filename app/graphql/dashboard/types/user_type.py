@@ -170,12 +170,4 @@ class UserType:
             logger.error("Error loading datasets for user %s: %r", current_user.id, e)
             raise InternalServerError("Failed to load datasets")
 
-        return [
-            DatasetType(
-                id=d.id,
-                name=d.name,
-                description=getattr(d, "description", None),
-                created_at=to_datetime_utc(d.created_at),
-            )
-            for d in datasets
-        ]
+        return [DatasetType.from_model(d) for d in datasets]

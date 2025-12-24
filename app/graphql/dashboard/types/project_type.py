@@ -34,6 +34,7 @@ class ProjectType:
         if not current_user:
             raise ForbiddenError("You are not allowed to access this project")
 
+        # Load datasets using DAL
         try:
             async for session in get_session():
                 dataset_dal = DatasetDAL(session)
@@ -43,12 +44,5 @@ class ProjectType:
             logger.error("Error loading datasets for project %s: %r", self.id, e)
             raise InternalServerError("Failed to load project datasets")
 
-        return [
-            DatasetType(
-                id=d.id,
-                name=d.name,
-                description=d.description,
-                created_at=to_datetime_utc(d.created_at),
-            )
-            for d in datasets
-        ]
+        # Convert each dataset to GraphQL type using the factory
+        return [DatasetType.from_model(d) for d in datasets]

@@ -4,6 +4,9 @@ import strawberry
 from app.graphql.dashboard.query import DashboardQuery
 from app.graphql.dashboard.subscription import Subscription as DashboardSubscription
 from app.graphql.dashboard.mutation import DashboardMutation
+from app.graphql.dashboard.types.project_type import ProjectType
+from app.graphql.schema.dataset_schema import DatasetType
+from app.graphql.dashboard.types.user_type import UserType
 
 
 @strawberry.type
