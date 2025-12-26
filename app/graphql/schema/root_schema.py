@@ -4,13 +4,12 @@ import strawberry
 from app.graphql.dashboard.query import DashboardQuery
 from app.graphql.dashboard.subscription import Subscription as DashboardSubscription
 from app.graphql.dashboard.mutation import DashboardMutation
-from app.graphql.dashboard.types.project_type import ProjectType
-from app.graphql.schema.dataset_schema import DatasetType
-from app.graphql.dashboard.types.user_type import UserType
+
+from app.graphql.schema.query.dataset_query import DatasetQuery
 
 
 @strawberry.type
-class Query(DashboardQuery):
+class Query(DashboardQuery, DatasetQuery):
     """Root Query type."""
 
     pass
@@ -32,6 +31,6 @@ class Mutation(DashboardMutation):
 
 schema = strawberry.Schema(
     query=Query,
-    mutation=Mutation,  # ⬅️ this is the important new line
+    mutation=Mutation,
     subscription=Subscription,
 )

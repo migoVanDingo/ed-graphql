@@ -64,16 +64,8 @@ class DashboardMutation:
                 await link_dal.create_link(project_id_str, dataset.id)
             break
 
-        return DatasetType(
-            id=dataset.id,
-            org_id=getattr(current_user, "organization_id", None),
-            datastore_id=dataset.datastore_id,
-            project_id=project_id_str,
-            name=dataset.name,
-            description=dataset.description,
-            created_at=to_datetime_utc(dataset.created_at),
-            updated_at=to_datetime_utc(dataset.updated_at),
-        )
+        # createDataset
+        return DatasetType.from_model(dataset)
 
     @strawberry.mutation
     async def attachDatasetToProject(
@@ -108,16 +100,8 @@ class DashboardMutation:
             updated = dataset
             break
 
-        return DatasetType(
-            id=updated.id,
-            org_id=getattr(current_user, "organization_id", None),
-            datastore_id=updated.datastore_id,
-            project_id=str(project_id),
-            name=updated.name,
-            description=updated.description,
-            created_at=to_datetime_utc(updated.created_at),
-            updated_at=to_datetime_utc(updated.updated_at),
-        )
+        # attachDatasetToProject
+        return DatasetType.from_model(updated)
 
     @strawberry.mutation
     async def addFilesToDataset(
@@ -163,13 +147,5 @@ class DashboardMutation:
             updated = dataset
             break
 
-        return DatasetType(
-            id=updated.id,
-            org_id=getattr(current_user, "organization_id", None),
-            datastore_id=updated.datastore_id,
-            project_id=None,
-            name=updated.name,
-            description=updated.description,
-            created_at=to_datetime_utc(updated.created_at),
-            updated_at=to_datetime_utc(updated.updated_at),
-        )
+        # addFilesToDataset
+        return DatasetType.from_model(updated)

@@ -40,7 +40,7 @@ class DatasetType:
     ) -> List[DatasetItemType]:
         ctx = info.context
         dataset_item_dal: DatasetItemDAL = ctx.dataset_item_dal
-        items = await dataset_item_dal.list_by_dataset_id(str(self.id))
+        items = await dataset_item_dal.list_by_dataset(str(self.id))
         return [
             DatasetItemType(
                 id=item.id,
