@@ -14,6 +14,8 @@ class DatastoreFileType:
     content_type: str
     size: int
     created_at: datetime
+    tags: List[str]
+    client_token: Optional[str]
 
 
 @strawberry.type

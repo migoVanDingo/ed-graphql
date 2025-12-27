@@ -9,7 +9,17 @@ from platform_common.db.dal.dataset_item_dal import DatasetItemDAL
 from platform_common.models.dataset import Dataset
 from platform_common.models.project_dataset_link import ProjectDatasetLink
 from platform_common.utils.time_helpers import to_datetime_utc
+from platform_common.db.dal.dataset_file_link_dal import DatasetFileLinkDAL
+
 from app.graphql.context import GraphQLContext
+
+
+@strawberry.type
+class DatasetFileLinkType:
+    id: strawberry.ID
+    dataset_id: strawberry.ID
+    file_id: strawberry.ID
+    role: Optional[str] = None
 
 
 @strawberry.type
@@ -65,6 +75,25 @@ class DatasetType:
         dataset_model: Dataset = await info.context.dataset_dal.get(self.id)
         return [
             ProjectType.from_model(link.project) for link in dataset_model.project_links
+        ]
+
+    @strawberry.field
+    async def fileLinks(
+        self,
+        info: Info[GraphQLContext, None],
+    ) -> List[DatasetFileLinkType]:
+        ctx = info.context
+        link_dal: DatasetFileLinkDAL = ctx.dataset_file_link_dal
+
+        links = await link_dal.get_by_dataset(str(self.id))
+        return [
+            DatasetFileLinkType(
+                id=l.id,
+                dataset_id=l.dataset_id,
+                file_id=l.file_id,
+                role=getattr(l, "role", None),
+            )
+            for l in links
         ]
 
     # -----------------------------------

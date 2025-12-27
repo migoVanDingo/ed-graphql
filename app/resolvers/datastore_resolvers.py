@@ -1,6 +1,6 @@
 # app/resolvers/datastore_resolvers.py
 
-from typing import Dict, List
+from typing import Dict, List, Optional, Any
 from strawberry.types import Info
 
 from platform_common.db.session import get_session
@@ -150,16 +150,26 @@ async def get_datastore_files_page(
     items = page["items"]
     total_count = page["total_count"]
 
-    gql_items: List[DatastoreFileType] = [
-        DatastoreFileType(
-            id=f.id,
-            filename=f.filename,
-            content_type=f.content_type,
-            size=f.size,
-            created_at=to_datetime_utc(f.created_at),  # ← convert here
+    gql_items: List[DatastoreFileType] = []
+    for f in items:
+        meta: Dict[str, Any] = getattr(f, "meta", {}) or {}
+        raw_tags: Any = meta.get("tags", [])
+        tags = raw_tags if isinstance(raw_tags, list) else []
+        client_token: Optional[str] = None
+        if isinstance(meta, dict):
+            client_token = meta.get("clientToken") or meta.get("client_token")
+
+        gql_items.append(
+            DatastoreFileType(
+                id=f.id,
+                filename=f.filename,
+                content_type=f.content_type,
+                size=f.size,
+                created_at=to_datetime_utc(f.created_at),  # ← convert here
+                tags=tags,
+                client_token=client_token,
+            )
         )
-        for f in items
-    ]
 
     return DatastoreFilesPageType(
         items=gql_items,

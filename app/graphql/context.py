@@ -16,6 +16,8 @@ from platform_common.db.dal.dataset_dal import DatasetDAL
 from platform_common.db.dal.dataset_item_dal import DatasetItemDAL
 from platform_common.db.dal.project_dal import ProjectDAL
 from platform_common.db.dal.file_dal import FileDAL
+from platform_common.db.dal.dataset_file_link_dal import DatasetFileLinkDAL
+
 
 logger = get_logger("graphql_context")
 
@@ -57,9 +59,11 @@ async def get_context(request: Request = None, websocket: WebSocket = None):
                 db_session=session,
                 dataset_dal=DatasetDAL(session),
                 dataset_item_dal=DatasetItemDAL(session),
+                dataset_file_link_dal=DatasetFileLinkDAL(session),  # ✅ add this
                 project_dal=ProjectDAL(session),
                 file_dal=FileDAL(session),
             )
+
             return
 
         if websocket is not None:
@@ -70,9 +74,11 @@ async def get_context(request: Request = None, websocket: WebSocket = None):
                 db_session=session,
                 dataset_dal=DatasetDAL(session),
                 dataset_item_dal=DatasetItemDAL(session),
+                dataset_file_link_dal=DatasetFileLinkDAL(session),  # ✅ add this
                 project_dal=ProjectDAL(session),
                 file_dal=FileDAL(session),
             )
+
             return
 
         raise RuntimeError("get_context called without request or websocket")

@@ -13,6 +13,8 @@ from platform_common.errors.base import AuthError, ForbiddenError, NotFoundError
 from platform_common.models.dataset import Dataset
 from platform_common.models.dataset_item import DatasetItem
 from platform_common.utils.time_helpers import to_datetime_utc
+from platform_common.db.dal.dataset_file_link_dal import DatasetFileLinkDAL
+
 
 from app.graphql.schema.dataset_schema import DatasetType, CreateDatasetInput
 
@@ -114,21 +116,24 @@ class DashboardMutation:
         if not current_user:
             raise AuthError("Not authenticated")
 
+        dsid = str(dataset_id)
+        fids = [str(fid) for fid in file_ids]
+
         async for session in get_session():
             dataset_dal = DatasetDAL(session)
-            dataset_item_dal = DatasetItemDAL(session)
             file_dal = FileDAL(session)
+            link_dal = DatasetFileLinkDAL(session)
 
-            dataset = await dataset_dal.get_by_id(str(dataset_id))
+            dataset = await dataset_dal.get_by_id(dsid)
             if dataset is None:
                 raise NotFoundError("Dataset not found")
 
             if dataset.owner_id and dataset.owner_id != current_user.id:
                 raise ForbiddenError("Not allowed to modify this dataset")
 
-            files = await file_dal.get_many_by_ids([str(fid) for fid in file_ids])
-            if len(files) != len(file_ids):
-                missing = set(map(str, file_ids)) - {f.id for f in files}
+            files = await file_dal.get_many_by_ids(fids)
+            if len(files) != len(fids):
+                missing = set(fids) - {f.id for f in files}
                 raise NotFoundError(f"Some files not found: {missing}")
 
             for f in files:
@@ -137,15 +142,15 @@ class DashboardMutation:
                         "All files must belong to the same datastore as the dataset"
                     )
 
-            for f in files:
-                item = DatasetItem(
-                    dataset_id=dataset.id,
-                    file_id=f.id,
-                )
-                await dataset_item_dal.save(item)
+            # ✅ Create dataset_file_link rows (this will fire your trigger + recompute metrics)
+            await link_dal.add_files_to_dataset(
+                dataset_id=dataset.id,
+                file_ids=fids,
+                role="input",
+                ignore_duplicates=True,
+            )
 
             updated = dataset
             break
 
-        # addFilesToDataset
         return DatasetType.from_model(updated)
